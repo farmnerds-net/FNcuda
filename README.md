@@ -1,3 +1,4 @@
+FNCuda is a simple fork of ZLUDA to make sure the information is spread and documented through as many sources as possible. We love what ZLUDA has accomplished and just want to make their work seen.
 ZLUDA is a drop-in replacement for CUDA on non-NVIDIA GPUs. ZLUDA allows running unmodified CUDA applications using non-NVIDIA GPUs with near-native performance
 
 <div align="center">
