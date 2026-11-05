@@ -25,6 +25,7 @@ const ROCBLAS_RS: &'static str = include_str! {"../../ext/rocblas-sys/src/lib.rs
 const ROCSPARSE_RS: &'static str = include_str! {"../../ext/rocsparse-sys/src/lib.rs"};
 const HIPBLASLT_RS: &'static str = include_str! {"../../ext/hipblaslt-sys/src/lib.rs"};
 const MIOPEN_RS: &'static str = include_str! {"../../ext/miopen-sys/src/lib.rs"};
+const HIPFFT_RS: &'static str = include_str! {"../../ext/hipfft-sys/src/lib.rs"};
 
 // This macro accepts following arguments:
 // * `normal_macro`: ident for a normal macro
@@ -88,6 +89,11 @@ pub fn rocblas_function_declarations(tokens: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn rocsparse_function_declarations(tokens: TokenStream) -> TokenStream {
     function_declarations(tokens, ROCSPARSE_RS, true)
+}
+
+#[proc_macro]
+pub fn hipfft_function_declarations(tokens: TokenStream) -> TokenStream {
+    function_declarations(tokens, HIPFFT_RS, true)
 }
 
 #[proc_macro]
@@ -243,8 +249,8 @@ impl VisitMut for FixFnSignatures {
 }
 
 const MODULES: &[&str] = &[
-    "array", "context", "device", "driver", "event", "function", "graph", "kernel",
-    "library", "link", "memory", "module", "pointer", "stream", "tex"
+    "array", "context", "d3d11", "device", "driver", "event", "function", "graph", "graphics", "kernel",
+    "library", "link", "memory", "module", "pointer", "stream", "tex", "surf"
 ];
 
 fn normalize_fn_impl(
@@ -293,6 +299,11 @@ pub fn cudnn_normalize_fn(tokens: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn cusparse_normalize_fn(tokens: TokenStream) -> TokenStream {
     normalize_fn_impl("cusparse", None, tokens)
+}
+
+#[proc_macro]
+pub fn cufft_normalize_fn(tokens: TokenStream) -> TokenStream {
+    normalize_fn_impl("cufft", None, tokens)
 }
 
 #[proc_macro]
@@ -390,13 +401,25 @@ impl Parse for FnWithFields {
 }
 
 fn split(fn_: &str) -> Vec<String> {
+    fn needs_special_split(c: char, next: Option<char>) -> bool {
+        let Some(next_char) = next else { return false; };
+        (c.is_ascii_digit() && next_char == 'D') || (c == 'D' && next_char.is_ascii_digit())
+    }
+    // to parse segments like "2D", "D3D11" etc.
+    fn parse_special(first: char, iter: &mut iter::Peekable<impl Iterator<Item = char>>) -> String {
+        let mut segment = String::new();
+        segment.push(first.to_ascii_lowercase());
+        while let Some(c) = iter.next_if(|c| c.is_ascii_digit() || *c == 'D') {
+            segment.push(c.to_ascii_lowercase());
+        }
+        return segment;
+    }
     let mut result = Vec::new();
     let mut chars: iter::Peekable<_> = fn_.chars().peekable();
     while let Some(c) = chars.next() {
-        // Special handling of 2D/3D etc.
-        if c.is_ascii_digit() && chars.peek() == Some(&'D') {
-            chars.next();
-            result.push(format!("{c}d"));
+        let next = chars.peek().copied();
+        if needs_special_split(c, next) {
+            result.push(parse_special(c, &mut chars));
             continue;
         }
         if c.is_ascii_uppercase() {
